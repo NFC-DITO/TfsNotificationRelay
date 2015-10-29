@@ -111,13 +111,20 @@ namespace DevCore.TfsNotificationRelay.TelegramBot
 			var lines = notification.ToMessage(bot, s => s);
 			if (lines == null || !lines.Any()) return null;
 
-			var textMessage = string.Join("\n", lines);
+			string textMessage;
 
 			var buildNotification = notification as BuildCompletionNotification;
 			if (buildNotification != null)
 			{
 				var emoji = buildNotification.IsSuccessful ? GetEmojiString(_buildSuccessEmj) : GetEmojiString(_buildFailEmj);
-				textMessage = emoji + " " + textMessage;
+				textMessage = emoji + " " + lines[0];
+
+				if (lines.Count > 1)
+					textMessage += "*" + lines[1] + "*.";
+			}
+			else
+			{
+				textMessage = string.Join("\n", lines);
 			}
 
 			return textMessage.Replace("%br%", "\n")
