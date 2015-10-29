@@ -18,21 +18,16 @@ namespace TelegramBotTest
 			basicProxy.Credentials = CredentialCache.DefaultNetworkCredentials;
 
 			var botClient = new BotClient("162741643:AAGNaxXv56htAOi00TtW2seTSgfOkJJS0zA", basicProxy);
-			var updates = botClient.GetUpdates().Result;
+			var allowedUsers = new[] { "fake" };
+			var telegramBotNotifier = new TelegramBotNotifier();
 
-			var messages = new List<Message>();
+			var updatesEF = telegramBotNotifier.GetBotUpdates(botClient, "e-Factoring");
+			var updatesBI = telegramBotNotifier.GetBotUpdates(botClient, "bicenter");
 
-			foreach (var update in updates)
-			{
-				if (update.Message.Text != null && update.Message.Text.StartsWith("/tfsproject"))
-				{
-					if (update.Message.Text.IndexOf("e-Factoring", StringComparison.OrdinalIgnoreCase) >= 0)
-					{
-						messages.Add(update.Message);
-					}
-				}
-			}
-			
+			//DoWork(updatesEF, allowedUsers);
+			//DoWork(updatesBI, allowedUsers);
+
+			Console.ReadKey();
 		}
 	}
 }

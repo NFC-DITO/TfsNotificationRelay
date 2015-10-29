@@ -27,51 +27,74 @@ namespace DevCore.TfsNotificationRelay.TelegramBot
 			var proxyUrl = bot.GetSetting("proxyUrl");
 			var proxyUser = bot.GetSetting("proxyUser");
 			var proxyPassword = bot.GetSetting("proxyPassword");
+			var allowedUsers = bot.GetCsvSetting("allowedUsers")?.ToArray();
 
 			var proxyUri = new Uri(proxyUrl);
 			var basicProxy = new WebProxy(proxyUri) { Credentials = new NetworkCredential(proxyUser, proxyPassword) };
 			var botClient = new BotClient(apiToken, basicProxy);
-			var messages = await GetMessages(botClient, matchingRule.TeamProject);
 
-			var textMessage = CreateTextMessage(notification, bot);
+			var botUpdates = GetBotUpdates(botClient, matchingRule.TeamProject);
 
-			if (string.IsNullOrEmpty(textMessage))
+			var messageText = CreateMessageText(notification, bot);
+
+			if (string.IsNullOrEmpty(messageText))
 			{
-				requestContext.Trace(0, TraceLevel.Verbose, Constants.TraceArea, "TelegramBotNotifier", "Nothing to send: ", notification);
+				requestContext.Trace(0, TraceLevel.Verbose, Constants.TraceArea, "TelegramBotNotifier", "Nothing to send: {0}", notification.GetType());
 				return;
 			}
 
-			var sended = new List<int>();
-
-			foreach (var message in messages)
+			foreach (var chatId in botUpdates.Keys)
 			{
-				var chatId = message.Chat.Id;
+				var message = botUpdates[chatId];
+				var user = message.From;
 
-				if (sended.Contains(chatId)) continue;
+				if (user == null)
+				{
+					requestContext.Trace(0, TraceLevel.Warning, Constants.TraceArea, "TelegramBotNotifier",
+						"User is unknown for chat: {1}. \n {0}", messageText, message.Chat.Id);
+					continue;
+				}
 
-				requestContext.Trace(0, TraceLevel.Verbose, Constants.TraceArea, "TelegramBotNotifier", "Sending notification to {0}\n{1}", message.From.Username);
+				var fullName = $"{user.FirstName} {user.LastName}";
 
-				await botClient.SendTextMessage(chatId, textMessage, true);
+				if (allowedUsers != null && !allowedUsers.Contains(user.Username))
+				{
+					requestContext.Trace(0, TraceLevel.Warning, Constants.TraceArea, "TelegramBotNotifier",
+						"Access denied for {1} ({0}). \nAllowed users: {2}", fullName, user.Username, string.Join(",", allowedUsers));
+					continue;
+				}
 
-				sended.Add(chatId);
+				var result = botClient.SendTextMessage(message.Chat.Id, messageText, true).Result;
+
+				requestContext.Trace(0, TraceLevel.Verbose, Constants.TraceArea, "TelegramBotNotifier",
+					"Send notification to {1} ({0}). \nMessageId: {3} \n{2}", fullName, user.Username, messageText, result.MessageId);
 			}
 		}
 
-		public async Task<List<Message>> GetMessages(BotClient botClient, string teamProject)
+		public Dictionary<int, Message> GetBotUpdates(BotClient botClient, string teamProject)
 		{
-			var updates = await botClient.GetUpdates();
-			var messages = new List<Message>();
+			var updates = botClient.GetUpdates().Result;
+			var messages = new Dictionary<int, Message>();
 
 			foreach (var update in updates)
 			{
-				var messageText = update.Message.Text;
+				var message = update.Message;
 
-				if (!string.IsNullOrEmpty(messageText) && messageText.StartsWith("/tfsproject"))
+				var messageText = message.Text;
+
+				if (string.IsNullOrEmpty(messageText)) continue;
+
+				if (message.Chat == null) continue;
+
+				var chatId = message.Chat.Id;
+
+				if (update.Message.Text.IndexOf(teamProject, StringComparison.OrdinalIgnoreCase) >= 0)
 				{
-					if (update.Message.Text.IndexOf(teamProject, StringComparison.OrdinalIgnoreCase) >= 0)
-					{
-						messages.Add(update.Message);
-					}
+					if (messageText.StartsWith("/subscribe_tfs") && !messages.ContainsKey(chatId))
+						messages.Add(chatId, message);
+
+					if (messageText.StartsWith("/unsubscribe_tfs") && messages.ContainsKey(chatId))
+						messages.Remove(chatId);
 				}
 			}
 
@@ -83,7 +106,7 @@ namespace DevCore.TfsNotificationRelay.TelegramBot
 			return Encoding.UTF8.GetString(data);
 		}
 
-		private string CreateTextMessage(INotification notification, BotElement bot)
+		private string CreateMessageText(INotification notification, BotElement bot)
 		{
 			var lines = notification.ToMessage(bot, s => s);
 			if (lines == null || !lines.Any()) return null;

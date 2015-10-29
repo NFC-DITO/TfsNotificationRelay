@@ -55,6 +55,10 @@
       <Project>{13A7EAB0-1F99-4DCA-94EE-C9A859775CFC}</Project>
       <Name>TfsNotificationRelay.TelegramBot</Name>
     </ProjectReference>
+    <ProjectReference Include="..\TfsNotificationRelay\TfsNotificationRelay.csproj">
+      <Project>{b42fe02c-24b3-4d93-b27b-df3a352e8504}</Project>
+      <Name>TfsNotificationRelay</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
